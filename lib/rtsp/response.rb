@@ -3,21 +3,17 @@ require 'sdp'
 require_relative 'error'
 
 module RTSP
-
   # Parses raw response data from the server/client and turns it into
   # attr_readers.
   class Response
-    attr_reader :rtsp_version
-    attr_reader :code
-    attr_reader :message
-    attr_reader :body
+    attr_reader :rtsp_version, :code, :message, :body
 
     # @param [String] raw_response The raw response string returned from the
     # server/client.
     def initialize(raw_response)
       if raw_response.nil? || raw_response.empty?
         raise RTSP::Error,
-          "#{self.class} received nil string--this shouldn't happen."
+              "#{self.class} received nil string--this shouldn't happen."
       end
 
       @raw_response = raw_response
@@ -37,14 +33,14 @@ module RTSP
     #
     # @return [String]
     def inspect
-      me = "#<#{self.class.name}:#{self.__id__} "
+      me = "#<#{self.class.name}:#{__id__} "
 
-      self.instance_variables.each do |variable|
+      instance_variables.each do |variable|
         me << "#{variable}=#{instance_variable_get(variable).inspect}, "
       end
 
-      me.sub!(/, $/, "")
-      me << ">"
+      me.sub!(/, $/, '')
+      me << '>'
 
       me
     end
@@ -55,7 +51,7 @@ module RTSP
     # @param [String] raw_response
     # @return [Array<String>] 2-element Array containing the head and body of
     #   the response.  Body will be nil if there wasn't one in the response.
-    def split_head_and_body_from raw_response
+    def split_head_and_body_from(raw_response)
       head_and_body = raw_response.split("\r\n\r\n", 2)
       head = head_and_body.first
       body = head_and_body.last == head ? nil : head_and_body.last
@@ -68,14 +64,12 @@ module RTSP
     #
     # @param [String] line The String containing the status line info.
     def extract_status_line(line)
-      line =~ /(RTSP|HTTP)\/(\d\.\d) (\d\d\d) ([^\r\n]+)/
-      @rtsp_version = $2
-      @code         = $3.to_i
-      @message      = $4
+      line =~ %r{(RTSP|HTTP)/(\d\.\d) (\d\d\d) ([^\r\n]+)}
+      @rtsp_version = Regexp.last_match(2)
+      @code         = Regexp.last_match(3).to_i
+      @message      = Regexp.last_match(4)
 
-      if @rtsp_version.nil?
-        raise RTSP::Error, "Status line corrupted: #{line}"
-      end
+      raise RTSP::Error, "Status line corrupted: #{line}" if @rtsp_version.nil?
     end
 
     # Reads through each header line of the RTSP response, extracts the
@@ -83,7 +77,7 @@ module RTSP
     # snake-case accessor with that value set.
     #
     # @param [String] head The section of headers from the response text.
-    def parse_head head
+    def parse_head(head)
       lines = head.split "\r\n"
 
       lines.each_with_index do |line, i|
@@ -92,19 +86,17 @@ module RTSP
           next
         end
 
-        if line.include? "Session: "
+        if line.include? 'Session: '
           value = {}
-          line =~ /Session: ([\w\\$\-\.\+]+)/
-          value[:session_id] = $1
+          line =~ /Session: ([\w\\$\-.+]+)/
+          value[:session_id] = Regexp.last_match(1)
 
-          if line =~ /timeout=(.+)/
-            value[:timeout] = $1.to_i
-          end
+          value[:timeout] = Regexp.last_match(1).to_i if line =~ /timeout=(.+)/
 
-          create_reader("session", value)
-        elsif line.include? ": "
-          header_and_value = line.strip.split(":", 2)
-          header_name = header_and_value.first.downcase.gsub(/-/, "_")
+          create_reader('session', value)
+        elsif line.include? ': '
+          header_and_value = line.strip.split(':', 2)
+          header_name = header_and_value.first.downcase.gsub(/[-.]/, '_')
           create_reader(header_name, header_and_value[1].strip)
         end
       end
@@ -116,12 +108,10 @@ module RTSP
     #
     # @param [String] body
     # @return [SDP::Description,String]
-    def parse_body body
-      if body =~ /^(\r\n|\n)/
-        body.gsub!(/^(\r\n|\n)/, '')
-      end
+    def parse_body(body)
+      body.gsub!(/^(\r\n|\n)/, '') if body =~ /^(\r\n|\n)/
 
-      if @content_type == "application/sdp"
+      if @content_type == 'application/sdp'
         SDP.parse body
       else
         body
@@ -136,14 +126,12 @@ module RTSP
     # @param [String] name
     # @param [String,Hash] value
     def create_reader(name, value)
-      unless value.empty?
-        if value.is_a? String
-          value = value =~ /^[0-9]*$/ ? value.to_i : value
-        end
+      if !value.empty? && (value.is_a? String)
+        value = value =~ /^[0-9]*$/ ? value.to_i : value
       end
 
       instance_variable_set("@#{name}", value)
-      self.instance_eval "def #{name}; @#{name}; end"
+      instance_eval "def #{name}; @#{name}; end", __FILE__, __LINE__
     end
   end
 end
